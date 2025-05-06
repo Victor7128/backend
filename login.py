@@ -79,13 +79,12 @@ async def request_password_reset(request_data: RequestPasswordReset):
     reset_token = await create_password_reset_token(request_data.email)
     
     return {
-        "message": "Si el correo existe en nuestra base de datos, recibirás instrucciones para restablecer tu contraseña.",
+        "message": "Correo encontrado! Ingrese su nueva contraseña",
         "debug_token": reset_token  
     }
 
 @router.post("/reset-password")
 async def confirm_password_reset(reset_data: ConfirmPasswordReset):
-    """Confirmar el reseteo de contraseña con el token recibido."""
     success = await reset_password(reset_data.token, reset_data.new_password)
     
     if not success:
