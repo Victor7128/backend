@@ -79,10 +79,10 @@ async def request_password_reset(request_data: RequestPasswordReset):
     user = await users_coll.find_one({"email": request_data.email})
     
     if not user:
-        return {
-            "message": "Correo no encontrado",
-            "found": False
-        }
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error_code": "EMAIL_NOT_FOUND", "message": "Correo no encontrado"}
+        )
 
     reset_token = await create_password_reset_token(request_data.email)
     
