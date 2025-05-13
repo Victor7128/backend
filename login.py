@@ -76,11 +76,20 @@ async def change_password(data: PasswordChange, current_user=Depends(get_current
 @router.post("/request-password-reset")
 async def request_password_reset(request_data: RequestPasswordReset):
     """Solicitar un token para resetear la contraseña."""
+    user = await users_coll.find_one({"email": request_data.email})
+    
+    if not user:
+        return {
+            "message": "Correo no encontrado",
+            "found": False
+        }
+
     reset_token = await create_password_reset_token(request_data.email)
     
     return {
-        "message": "Correo encontrado! Ingrese su nueva contraseña",
-        "debug_token": reset_token  
+        "message": "Correo encontrado!",
+        "found": True,
+        "debug_token": reset_token
     }
 
 @router.post("/reset-password")
@@ -102,4 +111,22 @@ async def read_me(current_user=Depends(get_current_user)):
         email=current_user["email"],
         username=current_user["username"],
         name=current_user["name"]
+    )
+
+@router.post("/verify-token", response_model=UserOut)
+async def verify_token(token: str = Depends(oauth2_scheme)):
+    """Verifica el token y devuelve el usuario asociado."""
+    user = await get_current_user(token)
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error_code": "INVALID_TOKEN", "message": "Token inválido o expirado"}
+        )
+    
+    return UserOut(
+        id=str(user["_id"]),
+        email=user["email"],
+        username=user["username"],
+        name=user["name"]
     )
