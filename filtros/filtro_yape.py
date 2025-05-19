@@ -2,7 +2,7 @@
 import cv2
 import numpy as np
 from fastapi import APIRouter, File, UploadFile, HTTPException
-from filtro_fuente import validate_yape_font
+from filtros.filtro_fuente import validate_yape_font
 
 router = APIRouter()
 
