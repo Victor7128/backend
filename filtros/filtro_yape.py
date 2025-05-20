@@ -2,7 +2,6 @@
 import cv2
 import numpy as np
 from fastapi import APIRouter, File, UploadFile, HTTPException
-from filtros.filtro_fuente import validate_yape_font
 
 router = APIRouter()
 
@@ -40,11 +39,7 @@ async def filter_yape(file: UploadFile = File(...)):
     img_bytes = await file.read()
     try:
         is_yape_transaction(img_bytes)
-        validate_yape_font(img_bytes)
-        porcentaje, nombre = validate_yape_font(img_bytes)
-        return {"resultado": "ok",
-                "filtro_fuente_nombre": nombre,
-                "filtro_fuente_porcentaje": porcentaje}
+        return {"resultado": "ok"}
     except NotYapeTransaction as e:
         raise HTTPException(status_code=400, detail=str(e))
     except ValueError as e:

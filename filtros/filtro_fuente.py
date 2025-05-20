@@ -2,6 +2,11 @@
 import cv2
 import numpy as np
 from typing import Dict, Tuple
+from fastapi import APIRouter, File, UploadFile, HTTPException
+
+router = APIRouter()
+class NotYapeTransaction(Exception):
+    pass
 
 def validate_yape_font(image_bytes: bytes) -> Tuple[float, str]:
     nparr = np.frombuffer(image_bytes, np.uint8)
@@ -47,3 +52,16 @@ def validate_yape_font(image_bytes: bytes) -> Tuple[float, str]:
     nombre = "Veracidad de Fuente"
     
     return porcentaje, nombre
+
+@router.post("/filtro_fuente")
+async def filtro_fuente(file: UploadFile = File(...)):
+    img_bytes = await file.read()
+    try:
+        porcentaje, nombre = validate_yape_font(img_bytes)
+        return {"resultado": "ok", "porcentaje": porcentaje, "nombre": nombre}
+    except NotYapeTransaction as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error procesando imagen: {e}")
