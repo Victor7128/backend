@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import os
 import glob
-from typing import List, Tuple, Optional, Dict, Union
+from typing import List, Tuple, Optional
 from fastapi import APIRouter, File, UploadFile, HTTPException
 
 router = APIRouter()
@@ -82,8 +82,8 @@ def detectar_diferencias(plantillas_paths: List[str], sospechosa_gray: np.ndarra
         'coincidencias': mejor_resultado['coincidencias']
     }
 
-@router.post("/filtro_fuente")
-async def filtro_fuente(file: UploadFile = File(...)):
+@router.post("/filtro_pixeles")
+async def filtro_pixeles(file: UploadFile = File(...)):
     try:
         if not file.content_type or not file.content_type.startswith('image/'):
             raise HTTPException(status_code=422, detail="❌ El archivo debe ser una imagen")
