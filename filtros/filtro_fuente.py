@@ -64,15 +64,23 @@ def evaluar_similitud(plantilla_path: str, sospechosa_gray: np.ndarray, threshol
 def detectar_diferencias(plantillas_paths: List[str], sospechosa_gray: np.ndarray, threshold: int = 30):
     resultados = []
     for plantilla_path in plantillas_paths:
-        mask, similitud, matches, mensaje = evaluar_similitud(plantilla_path, sospechosa_gray, threshold)
+        mask, similitud, matches, mensaje = evaluar_similitud(
+            plantilla_path, sospechosa_gray, threshold
+        )
         if mask is not None:
             resultados.append({
-                'porcentaje': similitud
-            })    
+                'plantilla': os.path.basename(plantilla_path),
+                'porcentaje': similitud,
+                'coincidencias': matches,
+                'mensaje': mensaje
+            })
     if not resultados:
         return None
     mejor_resultado = max(resultados, key=lambda x: x['porcentaje'])
-    return {'porcentaje': round(mejor_resultado['porcentaje'], 2)}
+    return {
+        'porcentaje': round(mejor_resultado['porcentaje'], 2),
+        'coincidencias': mejor_resultado['coincidencias']
+    }
 
 @router.post("/filtro_fuente")
 async def filtro_fuente(file: UploadFile = File(...)):
