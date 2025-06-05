@@ -1,9 +1,9 @@
+# Login
 from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from bson import ObjectId
 from bd import users_coll
 from auth import create_password_reset_token, reset_password
-from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from schemas import UserCreate, UserOut, Token, PasswordChange, RequestPasswordReset, ConfirmPasswordReset
 from auth import get_password_hash, verify_password, create_access_token, get_current_user, save_token, revoke_token, revoke_all_tokens

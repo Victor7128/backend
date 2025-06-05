@@ -1,3 +1,4 @@
+#Filtro de similitud de imágenes usando SSIM
 from fastapi import APIRouter, File, UploadFile, HTTPException
 from PIL import Image
 from skimage.metrics import structural_similarity as ssim

@@ -1,3 +1,4 @@
+# Filtro Exif
 from fastapi import APIRouter, File, UploadFile, HTTPException
 from PIL import Image
 from PIL.ExifTags import TAGS

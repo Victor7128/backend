@@ -1,3 +1,4 @@
+# Auth
 import os
 import uuid
 import secrets
@@ -8,7 +9,6 @@ from passlib.context import CryptContext
 from fastapi import HTTPException, status, Depends
 from fastapi.security import OAuth2PasswordBearer
 from typing import Optional
-from schemas import Token, PasswordChange
 from bd import users_coll, sessions_coll
 from dotenv import load_dotenv
 load_dotenv()
@@ -42,7 +42,7 @@ async def is_token_valid(token):
     return session is not None
 
 #reseteo de contraseña
-async def create_password_reset_token(email: str) -> str:
+async def create_password_reset_token(email: str) -> Optional[str]:
     """Crea un token de reseteo de contraseña con caducidad de 1 hora."""
     # Verificar que el usuario existe
     user = await users_coll.find_one({"email": email})
@@ -64,7 +64,7 @@ async def create_password_reset_token(email: str) -> str:
     
     return reset_token
 
-async def verify_reset_token(token: str) -> str:
+async def verify_reset_token(token: str) -> Optional[str]:
     """Verifica si el token de reseteo es válido y devuelve el email asociado."""
     user = await users_coll.find_one({
         "reset_token": token,
@@ -119,7 +119,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
             raise credentials_exception
             
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
+        email: Optional[str] = payload.get("sub")
         if email is None:
             raise credentials_exception
     except JWTError:
