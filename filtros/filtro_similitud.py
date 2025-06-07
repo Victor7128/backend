@@ -14,7 +14,6 @@ import gc
 try:
     from image_constants import IMAGE_DATA, IMAGE_ARRAYS, UNIQUE_IMAGE_NAMES, get_image_array  # type: ignore
     CONSTANTS_AVAILABLE = True
-    print(f"✅ Constantes cargadas: {len(UNIQUE_IMAGE_NAMES)} imágenes únicas")
 except ImportError:
     CONSTANTS_AVAILABLE = False
     UNIQUE_IMAGE_NAMES = []
