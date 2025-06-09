@@ -7,6 +7,7 @@ from filtros.filtro_pixeles import router as pixeles_router
 from filtros.filtro_exif import router as exif_router
 from filtros.filtro_similitud import router as similitud_router
 from filtros.filtro_ruido import router as ruido_router
+from filtros.filtro_histograma import router as histograma_router
 
 app = FastAPI()
 
@@ -24,3 +25,4 @@ app.include_router(pixeles_router)
 app.include_router(exif_router)
 app.include_router(similitud_router)
 app.include_router(ruido_router)
+app.include_router(histograma_router)
