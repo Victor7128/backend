@@ -29,10 +29,10 @@ async def filtro_ruido(file: UploadFile = File(...)):
             raise HTTPException(status_code=422, detail=f"❌ Error al procesar la imagen: {e}")
 
         advertencia = ""
-        if porcentaje < 90:
-            advertencia = "Sospechoso"
-        elif porcentaje < 70:
+        if porcentaje < 70:
             advertencia = "Alterado"
+        elif porcentaje < 90:
+            advertencia = "Sospechoso"
         else:
             advertencia = "Auténtico"
 

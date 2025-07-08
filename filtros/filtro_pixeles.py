@@ -114,10 +114,10 @@ async def filtro_pixeles(file: UploadFile = File(...)):
                 raise Exception("❌ No se pudo comparar la imagen con las plantillas")
             porcentaje = result['porcentaje']
             advertencia = ""
-            if porcentaje <= 98:
-                advertencia = "Sospechoso"
-            elif porcentaje <= 85:
+            if porcentaje <= 85:
                 advertencia = "Alterado"
+            elif porcentaje <= 98:
+                advertencia = "Sospechoso"
             else:
                 advertencia = "Auténtico"
 

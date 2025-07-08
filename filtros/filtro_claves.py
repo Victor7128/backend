@@ -32,7 +32,7 @@ PLANTILLA2 = [
     {"WordText": "operaci6n", "Left": 276, "Top": 1332}
 ]
 
-OCR_API_KEY = "K84911188188957"
+OCR_API_KEY = "e0b0a3ad7d88957"
 
 def ocr_api(file_path: str) -> Dict:
     try:
@@ -138,10 +138,10 @@ async def procesar_imagen(file: UploadFile = File(...)):
         porcentaje = round(max(porcentaje1, porcentaje2), 2)
 
         advertencia = ""
-        if porcentaje < 98:
-            advertencia = "Sospechoso"
-        elif porcentaje < 90:
+        if porcentaje < 90:
             advertencia = "Alterado"
+        elif porcentaje < 98:
+            advertencia = "Sospechoso"
         else:
             advertencia = "Auténtico"
 
