@@ -116,20 +116,6 @@ def detectar_estructura(texto):
         return 2
     return 0
 
-def validar_campos_obligatorios(resultado, advertencias):
-    if not resultado.get("codigo_operacion"):
-        advertencias.append("Nro. de Operación no detectada")
-    if not resultado.get("fecha"):
-        advertencias.append("Fecha no detectada")
-    if not resultado.get("hora"):
-        advertencias.append("Hora no detectada")
-    if not resultado.get("receptor"):
-        advertencias.append("Receptor no detectado")
-    if resultado.get("monto") is None:
-        advertencias.append("Monto no detectado")
-    if not resultado.get("destino"):
-        advertencias.append("Destino no detectado")
-
 def validar_estructura_1(texto, codigo_detectado=None, destino_detectado=None):
     resultado = {
         "estructura": "¡Yapeaste!",
@@ -144,15 +130,32 @@ def validar_estructura_1(texto, codigo_detectado=None, destino_detectado=None):
         "comentario": None
     }
     advertencias = []
+    # 1. Buscar monto con símbolo
     match_monto = re.search(r'S/\s?(\d+(?:\.\d{2})?)', texto)
+    monto_simbolo_encontrado = False
     if match_monto:
+        monto_simbolo_encontrado = True
         try:
             monto = float(match_monto.group(1))
             resultado["monto"] = monto
             if monto <= 0 or monto > 500:
-                advertencias.append("Monto incorrecto")
+                advertencias.append("Monto incorrecto, debe estar entre 0 - 500 soles.")
         except ValueError:
             advertencias.append("Error al convertir el monto a número.")
+    else:
+        # 2. Buscar cualquier número decimal razonable
+        match_monto_alt = re.search(r'\b(\d{1,4}(?:\.\d{2})?)\b', texto)
+        if match_monto_alt:
+            try:
+                monto = float(match_monto_alt.group(1))
+                resultado["monto"] = monto
+                if monto <= 0 or monto > 500:
+                    advertencias.append("Monto incorrecto, debe estar entre 0 - 500 soles.")
+                advertencias.append("Monto encontrado pero símbolo de moneda no detectado (S/.)")
+            except ValueError:
+                advertencias.append("Número detectado como posible monto pero no se pudo convertir")
+        else:
+            advertencias.append("Monto no detectado")
     match_nombre = re.search(r'S/\s?\d+(?:\.\d{2})?\s*\n?([A-ZÁÉÍÓÚÑa-záéíóúñ ]+)', texto)
     if match_nombre:
         resultado["receptor"] = match_nombre.group(1).strip()
@@ -207,7 +210,11 @@ def validar_estructura_1(texto, codigo_detectado=None, destino_detectado=None):
     match_codigo_8 = re.search(r'\b\d{8}\b', texto)
     if match_codigo_8:
         resultado["codigo_operacion"] = match_codigo_8.group()
-    validar_campos_obligatorios(resultado, advertencias)
+    validar_campos_obligatorios(resultado, advertencias, skip_monto=True)
+    if resultado["monto"] is None:
+        # Si después de todo no se encontró monto
+        if not any("símbolo" in adv for adv in advertencias):
+            advertencias.append("Monto no detectado")
     if advertencias:
         resultado["advertencias"] = advertencias
     return resultado
@@ -226,7 +233,9 @@ def validar_estructura_2(texto, codigo_detectado=None, destino_detectado=None):
     }
     advertencias = []
     match_monto = re.search(r'S/\s?(\d+(?:\.\d{2})?)', texto)
+    monto_simbolo_encontrado = False
     if match_monto:
+        monto_simbolo_encontrado = True
         try:
             monto = float(match_monto.group(1))
             resultado["monto"] = monto
@@ -234,6 +243,19 @@ def validar_estructura_2(texto, codigo_detectado=None, destino_detectado=None):
                 advertencias.append("Monto incorrecto")
         except ValueError:
             advertencias.append("Error al convertir el monto a número.")
+    else:
+        match_monto_alt = re.search(r'\b(\d{1,4}(?:\.\d{2})?)\b', texto)
+        if match_monto_alt:
+            try:
+                monto = float(match_monto_alt.group(1))
+                resultado["monto"] = monto
+                if monto <= 0 or monto > 500:
+                    advertencias.append("Monto incorrecto, debe estar entre 0 - 500 soles.")
+                advertencias.append("Monto encontrado pero símbolo de moneda no detectado(S/.)")
+            except ValueError:
+                advertencias.append("Número detectado como posible monto pero no se pudo convertir")
+        else:
+            advertencias.append("Monto no detectado")
     nombre = None
     lineas = texto.splitlines()
     linea_monto_idx = -1
@@ -241,6 +263,12 @@ def validar_estructura_2(texto, codigo_detectado=None, destino_detectado=None):
         if re.search(r'S/\s?(\d+(?:\.\d{2})?)', linea):
             linea_monto_idx = i
             break
+    if linea_monto_idx == -1:
+        # Si no se encontró con símbolo, buscar con el alternativo
+        for i, linea in enumerate(lineas):
+            if re.search(r'\b(\d{1,4}(?:\.\d{2})?)\b', linea):
+                linea_monto_idx = i
+                break
     if linea_monto_idx != -1 and linea_monto_idx + 1 < len(lineas):
         posible_nombre = lineas[linea_monto_idx + 1].strip()
         patron_nombre = r'^([A-ZÁÉÍÓÚÑa-záéíóúñ]+|[A-ZÁÉÍÓÚÑ]\.?)(\s+([A-ZÁÉÍÓÚÑa-záéíóúñ]+|[A-ZÁÉÍÓÚÑ]\.?)){1,4}$'
@@ -294,11 +322,28 @@ def validar_estructura_2(texto, codigo_detectado=None, destino_detectado=None):
     match_codigo_8 = re.search(r'\b\d{8}\b', texto)
     if match_codigo_8:
         resultado["codigo_operacion"] = match_codigo_8.group()
-    validar_campos_obligatorios(resultado, advertencias)
+    validar_campos_obligatorios(resultado, advertencias, skip_monto=True)
+    if resultado["monto"] is None:
+        if not any("símbolo" in adv for adv in advertencias):
+            advertencias.append("Monto no detectado")
     if advertencias:
         resultado["advertencias"] = advertencias
     return resultado
 
+def validar_campos_obligatorios(resultado, advertencias, skip_monto=False):
+    if not resultado.get("codigo_operacion"):
+        advertencias.append("Nro. de Operación no detectada")
+    if not resultado.get("fecha"):
+        advertencias.append("Fecha no detectada")
+    if not resultado.get("hora"):
+        advertencias.append("Hora no detectada")
+    if not resultado.get("receptor"):
+        advertencias.append("Receptor no detectado")
+    if not skip_monto and resultado.get("monto") is None:
+        advertencias.append("Monto no detectado")
+    if not resultado.get("destino"):
+        advertencias.append("Destino no detectado")
+        
 @router.post("/filtro_ocr")
 async def filtro_ocr(file: UploadFile = File(...)):
     if not file.content_type or not file.content_type.startswith('image/'):
