@@ -98,18 +98,25 @@ def extraer_exif(imagen_bytes: bytes):
                             datos_utiles.pop(gps_field, None)
             except Exception as e:
                 print(f"Error con piexif: {e}")
-        
-        # Determinar el mensaje de respuesta
-        if not datos_utiles:
-            mensaje = "⚠️ La imagen no contiene metadatos EXIF significativos (posible captura de pantalla)"
+
+        # Solo mostrar advertencia si el formato NO es JPEG/JPG o PNG
+        formato = (info_basica.get("format") or "").lower()
+        if formato not in ["jpeg", "jpg", "png"]:
+            advertencia_formato = "Sospechoso"
         else:
-            mensaje = "✅ Metadatos EXIF extraídos correctamente"
+            advertencia_formato = ""
+
+        if not datos_utiles:
+            mensaje = "Sospechoso"
+        else:
+            mensaje = "Metadatos EXIF extraídos correctamente"
 
         return {
             "info_imagen": info_basica,
             "datos": datos_utiles,
             "editado": sospechoso,
-            "tiene_gps": "GPS" in datos_utiles
+            "tiene_gps": "GPS" in datos_utiles,
+            "advertencia_formato": advertencia_formato
         }, mensaje
 
     except Exception as e:
@@ -121,20 +128,20 @@ async def filtro_exif(file: UploadFile = File(...)):
         if not file.content_type or not file.content_type.startswith('image/'):
             raise HTTPException(
                 status_code=422, 
-                detail="❌ El archivo debe ser una imagen válida"
+                detail="El archivo debe ser una imagen válida"
             )
 
-        if file.size and file.size > 10 * 1024 * 1024:  # 10MB limit
+        if file.size and file.size > 10 * 1024 * 1024:
             raise HTTPException(
                 status_code=413, 
-                detail="❌ El archivo es demasiado grande (máximo 10MB)"
+                detail="El archivo es demasiado grande (máximo 10MB)"
             )
 
         content = await file.read()
         if not content:
             raise HTTPException(
                 status_code=422, 
-                detail="❌ El archivo está vacío"
+                detail="El archivo está vacío"
             )
 
         resultado, mensaje = extraer_exif(content)
@@ -148,10 +155,11 @@ async def filtro_exif(file: UploadFile = File(...)):
             "info_imagen": resultado["info_imagen"],
             "editado": resultado["editado"],
             "tiene_gps": resultado["tiene_gps"],
-            "exif": resultado["datos"]
+            "exif": resultado["datos"],
+            "advertencia_formato": resultado["advertencia_formato"]
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"❌ Error interno: {e}")
+        raise HTTPException(status_code=500, detail=f"❌ Error interno: {e}") 

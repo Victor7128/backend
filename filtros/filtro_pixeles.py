@@ -1,8 +1,8 @@
-# Filtro de pixeles
 import cv2
 import numpy as np
 import os
 import glob
+import tempfile
 from typing import List, Tuple, Optional
 from fastapi import APIRouter, File, UploadFile, HTTPException
 
@@ -88,30 +88,46 @@ async def filtro_pixeles(file: UploadFile = File(...)):
     try:
         if not file.content_type or not file.content_type.startswith('image/'):
             raise HTTPException(status_code=422, detail="❌ El archivo debe ser una imagen")
+
         content = await file.read()
-        nparr = np.frombuffer(content, np.uint8)
-        sospechosa_gray = cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE)
-        if sospechosa_gray is None:
-            raise HTTPException(status_code=422, detail="❌ No se pudo decodificar la imagen subida")
-        if sospechosa_gray.size == 0:
-            raise HTTPException(status_code=422, detail="❌ La imagen está vacía")
-        plantillas_dir = "./filtros/plantillas/"
-        extensiones = ['*.jpg', '*.jpeg', '*.png', '*.bmp']
-        plantillas_paths = []
-        for ext in extensiones:
-            plantillas_paths.extend(glob.glob(os.path.join(plantillas_dir, ext)))        
-        if not plantillas_paths:
-            raise HTTPException(status_code=500, detail="❌ No hay plantillas disponibles para comparar")
-        threshold = 30
-        result = detectar_diferencias(plantillas_paths, sospechosa_gray, threshold)        
-        if result is None:
-            raise HTTPException(status_code=404, detail="⚠️ No se encontraron coincidencias con las plantillas")        
-        return result
-    except ValueError as e:
-        print(f"DEBUG: ValueError: {e}")
-        raise HTTPException(status_code=422, detail=str(e))
-    except HTTPException:
-        raise
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        try:
+            nparr = np.frombuffer(content, np.uint8)
+            sospechosa_gray = cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE)
+            if sospechosa_gray is None:
+                raise Exception("❌ No se pudo decodificar la imagen subida")
+            if sospechosa_gray.size == 0:
+                raise Exception("❌ La imagen está vacía")
+            plantillas_dir = "./filtros/plantillas/"
+            extensiones = ['*.jpg', '*.jpeg', '*.png', '*.bmp']
+            plantillas_paths = []
+            for ext in extensiones:
+                plantillas_paths.extend(glob.glob(os.path.join(plantillas_dir, ext)))
+            if not plantillas_paths:
+                raise Exception("❌ No hay plantillas disponibles para comparar")
+            threshold = 30
+            result = detectar_diferencias(plantillas_paths, sospechosa_gray, threshold)
+            if result is None:
+                raise Exception("❌ No se pudo comparar la imagen con las plantillas")
+            porcentaje = result['porcentaje']
+            advertencia = ""
+            if porcentaje <= 98:
+                advertencia = "Sospechoso"
+            elif porcentaje <= 85:
+                advertencia = "Alterado"
+            else:
+                advertencia = "Auténtico"
+
+            return {
+                "porcentaje_coincidencia": round(porcentaje, 2),
+                "coincidencias": result['coincidencias'],
+                "advertencia": advertencia
+            }
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"❌ Error al procesar la imagen: {e}")
+
     except Exception as e:
-        print(f"DEBUG: Exception general: {e}")
-        raise HTTPException(status_code=500, detail=f"Error procesando imagen: {e}")
+        raise HTTPException(status_code=422, detail=f"❌ Error al leer el archivo: {e}")

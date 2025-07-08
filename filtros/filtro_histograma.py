@@ -43,9 +43,24 @@ async def histograma(file: UploadFile = File(...)):
     similitud_b = compare_histograms(TEMPLATE_HISTOGRAM["b"], b)
     similitud_total = (similitud_r + similitud_g + similitud_b) / 3
 
-    return {
+    response = {
         "r": r,
         "g": g,
         "b": b,
         "similitud": round(similitud_total, 2)
     }
+    
+    if similitud_total <= 98:
+        response["advertencia"] = (
+            "Sospechoso"
+        )
+    elif similitud_total <= 90:
+        response["advertencia"] = (
+            "Alterado"
+        )
+    else:
+        response["advertencia"] = (
+            "Auténtico"
+        )
+
+    return response

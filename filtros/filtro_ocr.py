@@ -1,147 +1,141 @@
 import requests
-import math
-import tempfile
 import os
-from typing import Dict, List
+import cv2
+import numpy as np
+import re
+from datetime import datetime
 from fastapi import APIRouter, File, UploadFile, HTTPException
 
 router = APIRouter()
 
-PLANTILLA1 = [
-    {"WordText": "Yapeaste!", "Left": 85, "Top": 313},
-    {"WordText": "S/", "Left": 73, "Top": 380},
-    {"WordText": "CÖDIGO", "Left": 73, "Top": 639},
-    {"WordText": "SEGURIDAD", "Left": 199, "Top": 643},
-    {"WordText": "DATOS", "Left": 73, "Top": 757},
-    {"WordText": "TRANSACCIÖN", "Left": 222, "Top": 753},
-    {"WordText": "celular", "Left": 184, "Top": 821},
-    {"WordText": "Destino", "Left": 73, "Top": 876},
-    {"WordText": "operaciön", "Left": 184, "Top": 930}
-]
+API_KEY = 'K84680463488957'
+OCR_API_URL = 'https://api.ocr.space/parse/image'
 
-PLANTILLA2 = [
-    {"WordText": "iTe", "Left": 103, "Top": 426},
-    {"WordText": "Yapearon!", "Left": 199, "Top": 426},
-    {"WordText": "Sl", "Left": 101, "Top": 542},
-    {"WordText": "CÖDIGO", "Left": 100, "Top": 896},
-    {"WordText": "SEGURIDAD", "Left": 305, "Top": 904},
-    {"WordText": "DATOS", "Left": 101, "Top": 1061},
-    {"WordText": "TRANSACCIÖN", "Left": 336, "Top": 1053},
-    {"WordText": "celular", "Left": 276, "Top": 1155},
-    {"WordText": "Destino", "Left": 102, "Top": 1244},
-    {"WordText": "operaci6n", "Left": 276, "Top": 1332}
-]
+def enviar_imagen_ocr(path_imagen):
+    with open(path_imagen, 'rb') as f:
+        response = requests.post(
+            OCR_API_URL,
+            files={'file': f},
+            data={
+                'apikey': API_KEY,
+                'language': 'spa',
+                'OCREngine': '2',
+                'isOverlayRequired': True
+            }
+        )
+    resultado = response.json()
+    if resultado.get("IsErroredOnProcessing"):
+        return None, []
+    parsed_result = resultado['ParsedResults'][0]
+    return parsed_result['ParsedText'].strip(), parsed_result.get('TextOverlay', {}).get('Lines', [])
 
-OCR_API_KEY = "K84911188188957"
+def recortar_cuadro_blanco(imagen_path):
+    imagen = cv2.imread(imagen_path)
+    if imagen is None:
+        return None
+    gris = cv2.cvtColor(imagen, cv2.COLOR_BGR2GRAY)
+    _, binaria = cv2.threshold(gris, 240, 255, cv2.THRESH_BINARY)
+    contornos, _ = cv2.findContours(binaria, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contornos:
+        return None
+    contorno_mayor = max(contornos, key=cv2.contourArea)
+    x, y, w, h = cv2.boundingRect(contorno_mayor)
+    recorte = imagen[y:y + h, x:x + w]
+    temp_path = "recorte_temporal.png"
+    cv2.imwrite(temp_path, recorte)
+    return temp_path
 
-def ocr_api(file_path: str) -> Dict:
+def extraer_datos_con_contexto(texto):
+    match_monto = re.search(r'S/\s?(\d+(?:\.\d{2})?)', texto)
+    if not match_monto:
+        return None, "Monto no detectado."
     try:
-        with open(file_path, 'rb') as f:
-            response = requests.post(
-                "https://api.ocr.space/parse/image",
-                data={
-                    'apikey': OCR_API_KEY,
-                    'language': 'spa',
-                    'isOverlayRequired': 'true'
-                },
-                files={'file': f}
-            )
-        return response.json() if response.status_code == 200 else {}
-    except:
-        return {}
+        monto = float(match_monto.group(1))
+        if monto > 500:
+            return None, "Monto fuera de rango (mayor a 500)."
+    except Exception:
+        return None, "Monto inválido."
+    receptor = None
+    lineas = texto.splitlines()
+    linea_monto_idx = -1
+    for i, linea in enumerate(lineas):
+        if re.search(r'S/\s?(\d+(?:\.\d{2})?)', linea):
+            linea_monto_idx = i
+            break
+    if linea_monto_idx != -1 and linea_monto_idx + 1 < len(lineas):
+        posible_nombre = lineas[linea_monto_idx + 1].strip()
+        if re.match(r"^[A-Za-zÁÉÍÓÚÑáéíóúñ. ]{3,}$", posible_nombre) and len(posible_nombre.split()) >= 2:
+            receptor = posible_nombre
+    if not receptor:
+        match_destino = re.search(r'Destino[:\s]*([A-Za-zÁÉÍÓÚÑáéíóúñ ]+)', texto)
+        if match_destino:
+            receptor = match_destino.group(1).strip()
+    match_fecha = re.search(
+        r'(\d{1,2})\s+([a-zA-ZáéíóúñÑ]{3,9})\.?\s+(\d{4}).*?(\d{1,2}:\d{2}.*?m)',
+        texto
+    )
+    fecha_hora_valida = None
+    if match_fecha:
+        dia, mes_str, anio, hora = match_fecha.groups()
+        meses = {
+            'ene': 1, 'enero': 1,'feb': 2, 'febrero': 2,'mar': 3, 'marzo': 3,
+            'abr': 4, 'abril': 4,'may': 5, 'mayo': 5,'jun': 6, 'junio': 6,
+            'jul': 7, 'julio': 7,'ago': 8, 'agosto': 8,'sep': 9, 'sept': 9, 'septiembre': 9,
+            'oct': 10, 'octubre': 10,'nov': 11, 'noviembre': 11,'dic': 12, 'diciembre': 12
+        }
+        mes_limpio = mes_str.lower().strip('.')
+        mes_num = meses.get(mes_limpio, 0)
+        try:
+            fecha_obj = datetime(int(anio), mes_num, int(dia))
+            fecha_formateada = fecha_obj.strftime("%Y-%m-%d")
+            fecha_hora_valida = f"{fecha_formateada} {hora}"
+        except Exception:
+            fecha_hora_valida = None
+    nro_operacion = None
+    for i, linea in enumerate(lineas):
+        if 'Nro. de operación' in linea:
+            for extra_i in range(1, 3):
+                if i + extra_i < len(lineas):
+                    nums = re.findall(r'\d{8,12}', lineas[i + extra_i])
+                    if nums:
+                        nro_operacion = nums[0]
+                        break
+            break
+    if not nro_operacion:
+        posibles = re.findall(r'\b\d{8,12}\b', texto)
+        if posibles:
+            nro_operacion = posibles[-1]
+    return {
+        "nro_operacion": nro_operacion,
+        "fecha_hora": fecha_hora_valida,
+        "receptor": receptor
+    }, None
 
-def normalizar_texto(texto: str) -> str:
-    if not texto:
-        return ""
-    texto = texto.lower().strip()
-    cambios = {'ö': 'o', 'ü': 'u', 'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u'}
-    for k, v in cambios.items():
-        texto = texto.replace(k, v)
-    return texto
-
-def extraer_palabras(data_ocr: Dict) -> List[Dict]:
-    palabras = []
+@router.post("/filtro_ocr")
+async def filtro_ocr(file: UploadFile = File(...)):
     try:
-        for resultado in data_ocr.get('ParsedResults', []):
-            for linea in resultado.get('TextOverlay', {}).get('Lines', []):
-                for palabra in linea.get('Words', []):
-                    palabras.append({
-                        'WordText': palabra.get('WordText', ''),
-                        'Left': palabra.get('Left', 0),
-                        'Top': palabra.get('Top', 0)
-                    })
-    except:
-        pass
-    return palabras
-
-def calcular_similitud(plantilla: List[Dict], palabras_ocr: List[Dict]) -> float:
-    if not plantilla or not palabras_ocr:
-        return 0.0
-    
-    coincidencias = 0
-    usadas = set()
-    
-    for item_plantilla in plantilla:
-        texto_plantilla = normalizar_texto(item_plantilla['WordText'])
-        mejor_puntuacion = 0.0
-        mejor_indice = -1
-        
-        for i, palabra_ocr in enumerate(palabras_ocr):
-            if i in usadas:
-                continue
-                
-            texto_ocr = normalizar_texto(palabra_ocr['WordText'])
-            
-            if texto_plantilla == texto_ocr:
-                sim_texto = 1.0
-            elif texto_plantilla in texto_ocr or texto_ocr in texto_plantilla:
-                sim_texto = 0.8
-            else:
-                comunes = set(texto_plantilla) & set(texto_ocr)
-                sim_texto = len(comunes) / max(len(texto_plantilla), len(texto_ocr)) if texto_plantilla and texto_ocr else 0.0
-            
-            if sim_texto > 0.3:
-                distancia = math.sqrt(
-                    (item_plantilla['Left'] - palabra_ocr['Left'])**2 + 
-                    (item_plantilla['Top'] - palabra_ocr['Top'])**2
-                )
-                sim_posicion = max(0, (200 - distancia) / 200) if distancia <= 200 else 0.0
-                puntuacion = (sim_texto * 0.7) + (sim_posicion * 0.3)                
-                if puntuacion > mejor_puntuacion:
-                    mejor_puntuacion = puntuacion
-                    mejor_indice = i        
-        if mejor_puntuacion > 0.5:
-            coincidencias += 1
-            usadas.add(mejor_indice)    
-    return (coincidencias / len(plantilla)) * 100
-
-@router.post("/ocr")
-async def procesar_imagen(file: UploadFile = File(...)):    
-    if not file.content_type or not file.content_type.startswith('image/'):
-        raise HTTPException(400, "Debe ser una imagen")
-    
-    temp_path = None
-    try:
+        if not file.content_type or not file.content_type.startswith('image/'):
+            raise HTTPException(status_code=422, detail="❌ El archivo debe ser una imagen")
         content = await file.read()
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp:
-            temp.write(content)
-            temp_path = temp.name
-        data_ocr = ocr_api(temp_path)
-        if not data_ocr:
-            raise HTTPException(500, "Error en OCR")
-        palabras = extraer_palabras(data_ocr)
-        if not palabras:
-            return {"porcentaje": 0}
-        
-        porcentaje1 = calcular_similitud(PLANTILLA1, palabras)
-        porcentaje2 = calcular_similitud(PLANTILLA2, palabras)
-        
-        return {"porcentaje": round(max(porcentaje1, porcentaje2), 2)}
-        
+        temp_path = "temp_ocr_upload.jpg"
+        with open(temp_path, "wb") as f:
+            f.write(content)
+        recorte_path = recortar_cuadro_blanco(temp_path)
+        if not recorte_path:
+            os.remove(temp_path)
+            raise HTTPException(status_code=422, detail="❌ No se pudo procesar la imagen.")
+        texto, _ = enviar_imagen_ocr(recorte_path)
+        os.remove(temp_path)
+        os.remove(recorte_path)
+        if not texto:
+            raise HTTPException(status_code=422, detail="❌ No se pudo extraer texto de la imagen.")
+        datos, error = extraer_datos_con_contexto(texto)
+        if error:
+            raise HTTPException(status_code=422, detail=error)
+        if not datos:
+            raise HTTPException(status_code=422, detail="Comprobante no válido.")
+        return datos
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(500, f"Error: {str(e)}")
-    finally:
-        if temp_path and os.path.exists(temp_path):
-            os.unlink(temp_path)
+        raise HTTPException(status_code=500, detail=f"❌ Error en el servidor: {str(e)}")

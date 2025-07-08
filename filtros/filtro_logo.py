@@ -201,18 +201,16 @@ async def procesar_imagen_logo(file: UploadFile = File(...)):
                 "error": f"No se detectaron elementos necesarios para el cálculo: {', '.join(elementos_faltantes)}"
             }, status_code=400)
 
-        # Calcular distancias de la imagen de entrada
         distancias_nueva, _, _ = calcular_distancias(pos_logo, borde_recibo, cuadro_blanco_box)
         
-        # Procesar las plantillas
         distancias_plantilla1 = procesar_imagen_plantilla(plantilla1, logo)
         distancias_plantilla2 = procesar_imagen_plantilla(plantilla2, logo)
         
         resultados = []
         
-        # Comparar con plantilla 1
+
         if distancias_plantilla1:
-            porcentaje1 = float('inf')  # Initialize porcentaje1
+            porcentaje1 = float('inf')  
             resultado_porcentaje1 = calcular_porcentaje_cambio(distancias_nueva, distancias_plantilla1)
             comparacion1 = {}
             if isinstance(resultado_porcentaje1, tuple):
@@ -223,8 +221,7 @@ async def procesar_imagen_logo(file: UploadFile = File(...)):
                     "porcentaje_cambio": round(porcentaje1, 2),
                     "detalles": comparacion1
                 })
-        
-        # Comparar con plantilla 2
+    
         if distancias_plantilla2:
             resultado_porcentaje2 = calcular_porcentaje_cambio(distancias_nueva, distancias_plantilla2)
             porcentaje2, comparacion2 = (resultado_porcentaje2 if isinstance(resultado_porcentaje2, tuple) else (float('inf'), {}))
@@ -241,14 +238,21 @@ async def procesar_imagen_logo(file: UploadFile = File(...)):
                 "error": "No se pudo procesar ninguna de las plantillas o no se detectó el logo en las plantillas"
             }, status_code=400)
         
-        # Encontrar la mejor coincidencia (menor porcentaje de cambio)
         mejor_resultado = min(resultados, key=lambda x: x["porcentaje_cambio"])
-        
+        advertencia = ""
+        if mejor_resultado["porcentaje_cambio"] <= 95:
+            advertencia = "Sospechoso"
+        elif mejor_resultado["porcentaje_cambio"] < 90:
+            advertencia = "Alterado"
+        else:
+            advertencia = "Auténtico"
+
         return JSONResponse(content={
             "logo_detectado": True,
             "mejor_coincidencia": mejor_resultado,
             "todas_las_comparaciones": resultados,
-            "porcentaje_cambio_minimo": mejor_resultado["porcentaje_cambio"]
+            "porcentaje_cambio_minimo": mejor_resultado["porcentaje_cambio"],
+            "advertencia": advertencia
         }, status_code=200)
         
     except HTTPException:
