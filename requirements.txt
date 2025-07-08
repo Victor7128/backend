@@ -1,6 +1,7 @@
 annotated-types==0.7.0
 anyio==4.9.0
 bcrypt==3.2.2
+blinker==1.9.0
 certifi==2025.4.26
 cffi==1.17.1
 charset-normalizer==3.4.2
@@ -12,12 +13,15 @@ email_validator==2.2.0
 fastapi==0.115.12
 fastapi-cli==0.0.7
 filelock==3.18.0
+Flask==3.1.1
 fsspec==2025.5.0
 h11==0.16.0
 httpcore==1.0.9
 httptools==0.6.4
 httpx==0.28.1
 idna==3.10
+itsdangerous==2.2.0
+Jinja2==3.1.6
 lazy_loader==0.4
 MarkupSafe==3.0.2
 motor==3.7.0
@@ -53,3 +57,4 @@ typing_extensions==4.13.2
 urllib3==2.5.0
 uvicorn==0.34.2
 websockets==15.0.1
+Werkzeug==3.1.3
